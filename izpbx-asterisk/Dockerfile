@@ -294,7 +294,9 @@ RUN set -xe && \
   ## enable epel repository
   dnf install ${DNF_OPTS} epel-release && \
   ## repo for phpMyAdmin
-  rpm -Uvh https://rpms.remirepo.net/enterprise/remi-release-${RHEL_VER}.rpm && \
+  ## (retry because rpms.remirepo.net is often overloaded and resets connections)
+  for i in 1 2 3 4 5; do curl -fsSL --connect-timeout 30 -o /tmp/remi-release.rpm https://rpms.remirepo.net/enterprise/remi-release-${RHEL_VER}.rpm && break; echo "remi-release download failed... retry:[$i/5]"; sleep 20; done && \
+  rpm -Uvh /tmp/remi-release.rpm && rm -f /tmp/remi-release.rpm && \
   ## repo for zabbix agent
   rpm -Uvh https://repo.zabbix.com/zabbix/${ZABBIX_VER}/rocky/${RHEL_VER}/x86_64/zabbix-release-${ZABBIX_REL}.el${RHEL_VER}.noarch.rpm && \
   ## repo for ffmpeg command
