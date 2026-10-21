@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README: security notes about the PHP fix, GHCR images usage and migration from the upstream Docker Hub image
 ### Fixed
 - Retry the remi-release download during the image build (rpms.remirepo.net resets connections when overloaded)
+- Retry the dnf repositories metadata download during the image build (EPEL mirrors can be out of sync or serve broken certificates)
 
 ## [20.16.21] - 2025-10-14
 ### Changed

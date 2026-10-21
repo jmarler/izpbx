@@ -17,6 +17,8 @@ RUN set -xe && \
   export DNF_OPTS+=" -y --nodocs" && \
   if [[ ${RHEL_VER} -le 8 ]]; then export DNF_OPTS+=" --enablerepo=powertools" ;fi && \
   if [[ ${RHEL_VER} -ge 9 ]]; then export DNF_OPTS+=" --enablerepo=crb" ;fi && \
+  ## download repositories metadata (retry because mirrors can be out of sync or have broken certificates)
+  for i in 1 2 3 4 5; do dnf makecache ${DNF_OPTS} && break; echo "dnf metadata download failed... retry:[$i/5]"; dnf clean metadata; sleep 30; done && \
   dnf install ${DNF_OPTS} dnf-plugins-core rpm-build make gcc && \
   dnf module reset php -y && \
   dnf module enable php:${PHP_VER} -y && \
@@ -311,6 +313,8 @@ RUN set -xe && \
   if [[ ${RHEL_VER} -le 8 ]]; then export DNF_OPTS+=" --enablerepo=powertools" ;fi && \
   if [[ ${RHEL_VER} -ge 9 ]]; then export DNF_OPTS+=" --enablerepo=crb" ;fi && \
   #if [[ ${RHEL_VER} -le 8 ]]; then export DNF_OPTS+=" --enablerepo=okay" ;fi && \
+  ## download repositories metadata (retry because mirrors can be out of sync or have broken certificates)
+  for i in 1 2 3 4 5; do dnf makecache ${DNF_OPTS} && break; echo "dnf metadata download failed... retry:[$i/5]"; dnf clean metadata; sleep 30; done && \
   \
   ## enable specific module php needed for FreePBX
   : "---------- Enable PHP ${PHP_VER} ----------" && \
@@ -460,6 +464,8 @@ RUN set -xe && \
   ' \
   ;fi && \
   \
+  ## download repositories metadata (retry because mirrors can be out of sync or have broken certificates)
+  for i in 1 2 3 4 5; do dnf makecache ${DNF_OPTS} && break; echo "dnf metadata download failed... retry:[$i/5]"; dnf clean metadata; sleep 30; done && \
   dnf install ${DNF_OPTS} ${ASTERISK_BUILD_DEPS} ${ASTERISK_BUILD_DEPS_EXTRA} && \
   \
   : "---------- END installing build packages ----------" && \
