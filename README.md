@@ -4,17 +4,22 @@
 # Description
 izPBX is a Turnkey Cloud Native VoIP Telephony System powered by Asterisk Engine and FreePBX Management GUI
 
+> **About this fork:** this is a fork of [ugoviti/izpbx](https://github.com/ugoviti/izpbx) that keeps the izPBX image patched.
+> Container images are built with GitHub Actions and published to the GitHub Container Registry as **`ghcr.io/jmarler/izpbx-asterisk`**.
+> Release `20.16.22` fixes the critical PHP remote code execution vulnerabilities CVE-2026-109618 and CVE-2026-109619 (see [Security: PHP CVE-2026-109618 and CVE-2026-109619](#security-php-cve-2026-109618-and-cve-2026-109619)).
+> The upstream Docker Hub images (`docker.io/izdock/izpbx-asterisk`, up to `20.16.21`) are vulnerable: don't use them.
+
 # Supported tags
 
-## Production Branch:
-* `20.16`, `20.16.X`, `20.16.X-BUILD`,`20`, `latest` (Asterisk 20 LTS + FreePBX 16)
+## Production Branch (`ghcr.io/jmarler/izpbx-asterisk`):
+* `20.16`, `20.16.X`, `20.16.X-BUILD`, `20`, `latest` (Asterisk 20 LTS + FreePBX 16)
+* `main`: latest build of the `main` branch (published only when the workflow is run manually)
+
+## Upstream only (`docker.io/izdock/izpbx-asterisk`, not maintained by this fork, vulnerable PHP):
 * `18.16`, `18.16.X`, `18.16.X-BUILD`,`18` (Asterisk 18 LTS + FreePBX 16)
 * `18.15`, `18.15.X`, `18.15.X-BUILD` (Asterisk 18 LTS + FreePBX 15)
 * `16.15`, `16.15.X`, `16.15.X-BUILD` (Asterisk 16 LTS + FreePBX 15)
-
-## Development Branches:
-* Asterisk 20 LTS: `dev-20`, `dev-20.X`, `dev-20.X.X-BUILD`
-* Asterisk 18 LTS: `dev-18`, `dev-18.X`, `dev-18.X.X-BUILD`
+* Development branches: `dev-20`, `dev-20.X`, `dev-20.X.X-BUILD`, `dev-18`, `dev-18.X`, `dev-18.X.X-BUILD`
 
 ## Version notes:
 Tags format: **Z.Y.X-[BUILD]**
@@ -23,12 +28,12 @@ where:
   * **Z** = Asterisk release (PBX engine)
   * **Y** = FreePBX release (PBX GUI)
   * **X** = izPBX release (this project)
-  * **BUILD** = Build number
+  * **BUILD** = Build number (GitHub Actions run number)
 
-Look into project [Tags](https://hub.docker.com/r/izdock/izpbx-asterisk/tags) page to discover the latest versions
+Look into the [izpbx-asterisk package](https://github.com/jmarler/izpbx/pkgs/container/izpbx-asterisk) page to discover the latest versions
 
 # Dockerfile
-- https://github.com/ugoviti/izpbx/blob/main/izpbx-asterisk/Dockerfile
+- https://github.com/jmarler/izpbx/blob/main/izpbx-asterisk/Dockerfile
 
 # Targets of this project
 Cloud and On-Premise, Fast, Automatic and Repeatable deploy of VoIP PBX systems
@@ -77,6 +82,33 @@ Cloud and On-Premise, Fast, Automatic and Repeatable deploy of VoIP PBX systems
 #### izPBX CLI (Asterisk):
 ![izpbx-console](https://raw.githubusercontent.com/ugoviti/izpbx/main/izpbx-asterisk/screenshots/izpbx-cli.png)
   
+# Security: PHP CVE-2026-109618 and CVE-2026-109619
+On 21 October 2026 PHP disclosed two critical remote code execution vulnerabilities ([PHP security advisory](https://www.php.net/archive/2026.php#2026-10-21-5), CVSS 4.0 score 9.2):
+- **CVE-2026-109618** (GHSA-w8hw-w9fx-j79w): RCE via out of memory corruption
+- **CVE-2026-109619** (GHSA-6wmf-4rv5-p3rp): RCE via stale global state
+
+Every PHP release before 8.2.35, 8.3.36, 8.4.27 and 8.5.12 is affected. Apache `mod_php`, the mode izPBX uses, is rated the highest risk: an unauthenticated HTTP request can trigger the attack before any FreePBX code runs.
+
+## Why izPBX stays on PHP 7.4
+FreePBX 16 supports only PHP 7.4. The fixed PHP 8.x releases need FreePBX 17, which can't upgrade in place from FreePBX 16. When the vulnerabilities were disclosed, Rocky Linux 8 had no fixed PHP package (its `php:7.4` stream was `7.4.33-6`, its `php:8.2` stream `8.2.33`).
+
+## What changed (izPBX 20.16.22)
+- **Patched PHP 7.4 build:** the Dockerfile has a new first stage (`php-build`) that downloads the Rocky Linux 8 `php:7.4` source package and rebuilds it with the PHP project's minimal fix for 7.4 (php-src branch `PHP-7.4-CVE-2026-109618-109619`, commit `712e60f9`). The patch is rebased onto the distro sources, which already carry part of it: [`izpbx-asterisk/php-patches/7.4/php-7.4.33-cve-2026-109618-109619.patch`](izpbx-asterisk/php-patches/7.4/php-7.4.33-cve-2026-109618-109619.patch).
+- **Patched packages replace the distro ones:** the rebuilt packages (`7.4.33-6.1.izpbx.el8`) are installed over the distro packages, and the image build fails if they aren't installed.
+- **Skipped automatically when Rocky Linux ships a fix:** once the distro package changelog lists both CVEs, the rebuild stage does nothing and the distro packages are used. A newer distro release also replaces the izPBX build.
+- **Upload progress disabled:** `session.upload_progress.enabled = Off` is set in `/etc/php.d/99-local.ini`, as the advisory recommends (the patched build disables the feature anyway).
+- **Images published by this fork:** `compose.yml` pulls `ghcr.io/jmarler/izpbx-asterisk` instead of the vulnerable upstream Docker Hub image.
+
+## Behavior changes from the fix
+- When a PHP request exceeds `memory_limit`, the process now prints the fatal error to the log and exits, instead of returning a PHP error page. Apache starts a new worker, and the client gets an empty response.
+- PHP session upload progress (`session.upload_progress`) is no longer available. FreePBX installed and ran normally without it in testing.
+
+## Verify your container
+```
+docker exec izpbx rpm -q --changelog php | head -2
+```
+The first entry must read `izPBX rebuild with security fixes for CVE-2026-109618 CVE-2026-109619`, or come from a newer Rocky Linux package that lists both CVEs.
+
 # Deploy izPBX
 Using **docker compose** is the suggested method:
 
@@ -90,8 +122,8 @@ sudo dnf install docker-ce docker compose-plugin -y
 sudo systemctl enable --now docker
 ```
 
-- Create a `compose.yml`, or clone git repository, or download latest tarbal release from: https://github.com/ugoviti/izpbx/releases and unpack it into a directory (ex. `/opt/izpbx`), faster method with git:
-  - `git clone https://github.com/ugoviti/izpbx.git /opt/izpbx`
+- Create a `compose.yml`, or clone git repository, or download latest tarbal release from: https://github.com/jmarler/izpbx/releases and unpack it into a directory (ex. `/opt/izpbx`), faster method with git:
+  - `git clone https://github.com/jmarler/izpbx.git /opt/izpbx`
   - `cd /opt/izpbx`
 
 - Checkout into latest official release:
@@ -106,7 +138,9 @@ sudo systemctl enable --now docker
 - Deploy and start izpbx using `docker compose` command:
   - `docker compose up -d`
 
-- Wait the pull to finish (~60 seconds with fast internet connections) and point your web browser to the IP address of your docker host and follow initial setup guide
+- Wait the pull of the `ghcr.io/jmarler/izpbx-asterisk` image to finish (~60 seconds with fast internet connections) and point your web browser to the IP address of your docker host and follow initial setup guide
+
+**Note:** `compose.yml` also contains a `build:` section: when the image tag can't be pulled from ghcr.io, `docker compose up -d` builds it locally from `./izpbx-asterisk` (it takes a while: PHP and Asterisk are compiled from source). To always build locally run `docker compose build izpbx` before `docker compose up -d`.
 
 **Note:** by default, to correctly handle SIP NAT and SIP-RTP UDP traffic, the izpbx container will use the `network_mode: host`, so the izpbx container will be exposed directly to the outside network without using docker internal network range (**network_mode: host** will prevent multiple izpbx containers from running inside the same host).  
 Modify compose.yml and comment `#network_mode: host` if you want run multiple izpbx containers in the same host (not production tested. There will be problems with RTP traffic).
@@ -127,7 +161,7 @@ services:
   db:
     image: docker.io/mariadb:10.11.4
   izpbx:
-    image: docker.io/izdock/izpbx-asterisk:20.16.7
+    image: ghcr.io/jmarler/izpbx-asterisk:20.16.22
 ```
 
 and start the deploy with the same command `docker compose up -d`
@@ -139,7 +173,7 @@ If you want test izPBX without using docker compose command, you can use the fol
 `docker run --rm -ti -v ./data/db:/var/lib/mysql -e MYSQL_ROOT_PASSWORD=CHANGEM3 -e MYSQL_PASSWORD=CHANGEM3 --name izpbx-db mariadb:10.4`
 
 2. Start izPBX:  
-`docker run --rm -ti --network=host --privileged --cap-add=NET_ADMIN -v ./data/izpbx:/data -e MYSQL_ROOT_PASSWORD=CHANGEM3 -e MYSQL_PASSWORD=CHANGEM3 -e MYSQL_SERVER=127.0.0.1 -e MYSQL_DATABASE=asterisk -e MYSQL_USER=asterisk -e APP_DATA=/data --name izpbx izpbx-asterisk:latest`
+`docker run --rm -ti --network=host --privileged --cap-add=NET_ADMIN -v ./data/izpbx:/data -e MYSQL_ROOT_PASSWORD=CHANGEM3 -e MYSQL_PASSWORD=CHANGEM3 -e MYSQL_SERVER=127.0.0.1 -e MYSQL_DATABASE=asterisk -e MYSQL_USER=asterisk -e APP_DATA=/data --name izpbx ghcr.io/jmarler/izpbx-asterisk:latest`
 
 # Upgrade izPBX
 
@@ -158,6 +192,25 @@ git checkout tags/$(git tag | sort --version-sort | tail -1)
 docker compose pull
 docker compose up -d
 ```
+
+## Migrate an existing deploy from the upstream Docker Hub image
+If your `compose.yml` still uses `docker.io/izdock/izpbx-asterisk`, change only the image of the `izpbx` service (keep your `.env` and `data` directory):
+```
+    image: ghcr.io/jmarler/izpbx-asterisk:20.16.22
+```
+then backup the `data` directory, and recreate the container with:
+```
+docker compose pull izpbx
+docker compose up -d
+```
+
+# Build and publish images (GitHub Actions)
+The [Docker image workflow](.github/workflows/docker-publish.yml) builds `izpbx-asterisk` for `linux/amd64` and publishes it to `ghcr.io/jmarler/izpbx-asterisk`:
+- **Release:** push a version tag (ex. `git tag 20.16.22 && git push origin 20.16.22`) to publish `20.16.22`, `20.16.22-BUILD`, `20.16`, `20` and `latest`
+- **Manual:** run the workflow from the GitHub **Actions** tab to publish the selected branch (ex. `main`)
+- **Pull requests:** changes to `izpbx-asterisk/` are built but not published
+
+The first published image is private: make it public from the package settings (**Packages > izpbx-asterisk > Package settings > Change visibility**), or run `docker login ghcr.io` (with a GitHub token with `read:packages` scope) on the docker hosts before pulling.
 
 3. If the mariadb database version was changed, rememeber to update tables schema with command  
   `source .env ; docker exec -it izpbx-db mysql_upgrade -u root -p$MYSQL_ROOT_PASSWORD`
@@ -259,7 +312,7 @@ services:
 
   izpbx:
     #hostname: ${APP_FQDN}
-    image: izdock/izpbx-asterisk:18.15.11
+    image: ghcr.io/jmarler/izpbx-asterisk:20.16
     restart: unless-stopped
     depends_on:
     - db
@@ -352,7 +405,7 @@ services:
 
   izpbx1:
     #hostname: ${APP_FQDN}
-    image: izdock/izpbx-asterisk:18.15.11
+    image: ghcr.io/jmarler/izpbx-asterisk:20.16
     restart: unless-stopped
     depends_on:
     - db
@@ -370,7 +423,7 @@ services:
 
   izpbx2:
     #hostname: ${APP_FQDN}
-    image: izdock/izpbx-asterisk:18.15.11
+    image: ghcr.io/jmarler/izpbx-asterisk:20.16
     restart: unless-stopped
     depends_on:
     - db
@@ -388,7 +441,7 @@ services:
 
   izpbx3:
     #hostname: ${APP_FQDN}
-    image: izdock/izpbx-asterisk:18.15.11
+    image: ghcr.io/jmarler/izpbx-asterisk:20.16
     restart: unless-stopped
     depends_on:
     - db
