@@ -1,5 +1,59 @@
 ARG RHEL_VER=8
 ARG IMAGE_FROM=rockylinux/rockylinux:${RHEL_VER}
+
+### STEP 0: PHP SECURITY REBUILD
+## rebuild the distro PHP packages applying the security patches found in php-patches/${PHP_VER}/ that the distro has not released yet
+## a patch is skipped when every CVE it names is already in the distro package changelog, and nothing is rebuilt when no patch is left
+FROM ${IMAGE_FROM} AS php-build
+ARG RHEL_VER=8
+ARG PHP_VER=7.4
+COPY php-patches/ /usr/src/php-patches/
+RUN set -xe && \
+  mkdir -p /usr/src/php-rpms && \
+  PHP_PATCH_DIR="/usr/src/php-patches/${PHP_VER}" && \
+  if ! ls ${PHP_PATCH_DIR}/*.patch 1>/dev/null 2>&1; then echo "no PHP ${PHP_VER} patches to apply" && exit 0 ;fi && \
+  \
+  ## dnf extra options
+  export DNF_OPTS+=" -y --nodocs" && \
+  if [[ ${RHEL_VER} -le 8 ]]; then export DNF_OPTS+=" --enablerepo=powertools" ;fi && \
+  if [[ ${RHEL_VER} -ge 9 ]]; then export DNF_OPTS+=" --enablerepo=crb" ;fi && \
+  dnf install ${DNF_OPTS} dnf-plugins-core rpm-build make gcc && \
+  dnf module reset php -y && \
+  dnf module enable php:${PHP_VER} -y && \
+  \
+  : "---------- Download PHP ${PHP_VER} distro sources ----------" && \
+  cd /usr/src && \
+  dnf download --source --enablerepo=appstream-source php && \
+  rpm -i php-*.src.rpm && \
+  PHP_SPEC="/root/rpmbuild/SPECS/php.spec" && \
+  \
+  : "---------- Add missing security patches ----------" && \
+  PATCH_NUM=9000 && \
+  PATCH_CVES="" && \
+  for PATCH in ${PHP_PATCH_DIR}/*.patch; do \
+    PATCH_NAME=$(basename ${PATCH}) && \
+    MISSING_CVES=$(for CVE in $(grep -o "CVE-[0-9]*-[0-9]*" ${PATCH} | sort -u); do grep -q "${CVE}" ${PHP_SPEC} || echo ${CVE}; done) && \
+    if [ -z "${MISSING_CVES}" ]; then echo "skipping ${PATCH_NAME}: already fixed by the distro package" && continue ;fi && \
+    cp ${PATCH} /root/rpmbuild/SOURCES/ && \
+    sed "/^Release:/a Patch${PATCH_NUM}: ${PATCH_NAME}" -i ${PHP_SPEC} && \
+    sed "$(grep -n '^%patch' ${PHP_SPEC} | tail -1 | cut -d: -f1)a %patch -P${PATCH_NUM} -p1 -b .izpbx${PATCH_NUM}" -i ${PHP_SPEC} && \
+    PATCH_CVES+=" ${MISSING_CVES}" && \
+    PATCH_NUM=$((PATCH_NUM+1)) \
+  ;done && \
+  if [ -z "${PATCH_CVES// }" ]; then echo "distro PHP ${PHP_VER} packages already include every patch" && exit 0 ;fi && \
+  \
+  ## bump the release so the rebuilt packages are newer than the distro ones but older than the next distro update
+  PHP_RELEASE=$(rpmspec -q --srpm --qf "%{release}" ${PHP_SPEC} | cut -d. -f1) && \
+  sed "s/^Release: .*/Release: ${PHP_RELEASE}.1.izpbx%{?dist}/" -i ${PHP_SPEC} && \
+  sed "/^%changelog/a * $(LC_ALL=C date '+%a %b %d %Y') izPBX - $(rpmspec -q --srpm --qf '%{version}' ${PHP_SPEC})-${PHP_RELEASE}.1.izpbx\n- izPBX rebuild with security fixes for $(echo ${PATCH_CVES} | tr ' ' '\n' | sort -u | xargs)\n" -i ${PHP_SPEC} && \
+  \
+  : "---------- Build PHP ${PHP_VER} packages ----------" && \
+  dnf builddep ${DNF_OPTS} ${PHP_SPEC} && \
+  rpmbuild -bb --define "runselftest 0" --define "debug_package %{nil}" ${PHP_SPEC} && \
+  cp -a /root/rpmbuild/RPMS/*/*.rpm /usr/src/php-rpms/ && \
+  ls -l /usr/src/php-rpms/
+
+### STEP 0.1: MAIN IMAGE
 FROM ${IMAGE_FROM}
 
 LABEL maintainer="Ugo Viti <u.viti@wearequantico.it>"
@@ -89,6 +143,9 @@ ARG APP_DEBUG=0
 
 ## install ad hoc additional packages as defined via --build-arg next to regular dependencies
 ARG APP_INSTALL_EXTRA=""
+
+## security patched PHP packages built in STEP 0 (empty when the distro packages already include every patch)
+COPY --from=php-build /usr/src/php-rpms/ /usr/src/php-rpms/
 
 ### STEP 1: INSTALL BASE PACKAGES
 RUN set -xe && \
@@ -263,6 +320,16 @@ RUN set -xe && \
   ## install mandatory packages
   dnf install ${DNF_OPTS} ${APP_INSTALL_DEPS} ${APP_INSTALL_DEPS_EXTRA} ${APP_INSTALL_EXTRA} \
   && \
+  ## replace the installed distro PHP packages with the security patched ones
+  : "---------- Install patched PHP ${PHP_VER} packages ----------" && \
+  if ls /usr/src/php-rpms/*.rpm 1>/dev/null 2>&1; then \
+    PHP_RPMS="" && \
+    for PKG in $(rpm -qa --qf "%{NAME}\n" "php*"); do PHP_RPMS+=" $(ls /usr/src/php-rpms/${PKG}-[0-9]*.${OSARCH}.rpm 2>/dev/null || true)" ;done && \
+    dnf install ${DNF_OPTS} ${PHP_RPMS} && \
+    rpm -q --qf "%{RELEASE}\n" php | grep -q izpbx && \
+    rpm -q --changelog php | head -3 \
+  ;fi && \
+  rm -rf /usr/src/php-rpms && \
   ## install extra packages
   rpm -Uhv https://dl.rockylinux.org/pub/rocky/${RHEL_VER}/devel/${OSARCH}/os/Packages/l/lame-3.100-6.el${RHEL_VER}.${OSARCH}.rpm && \
   if [[ "$RHEL_MINIMAL" = "false" ]]; then \

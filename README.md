@@ -54,7 +54,7 @@ Cloud and On-Premise, Fast, Automatic and Repeatable deploy of VoIP PBX systems
 - Integrated cron daemon for running scheduled tasks
 - Integrated TFTP and DHCP server powered by DNSMasq for autoprovisioning VoIP Phones
 - Integrated NTP Server
-- Apache 2.4 and PHP 7.2 (mpm_prefork+mod_php configuration mode)
+- Apache 2.4 and PHP 7.4 (mpm_prefork+mod_php configuration mode)
 - Automatic Let's Encrypt HTTPS certificate management for exposed PBXs to Internet
 - Custom commercial SSL Certificates support
 - Logrotating of service logs

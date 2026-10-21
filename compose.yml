@@ -60,7 +60,14 @@ services:
 
   # https://hub.docker.com/r/izdock/izpbx-asterisk/tags?page=1&ordering=last_updated
   izpbx:
-    image: docker.io/izdock/izpbx-asterisk:20.16.21
+    ## upstream images up to 20.16.21 ship PHP vulnerable to CVE-2026-109618 and CVE-2026-109619
+    ## so build locally with: docker compose build izpbx
+    #image: docker.io/izdock/izpbx-asterisk:20.16.21
+    image: izpbx-asterisk:20.16.22
+    build:
+      context: ./izpbx-asterisk
+      args:
+        APP_VER: 20.16.22
     container_name: izpbx
     #entrypoint: /bin/bash -c "/bin/bash -c \"sleep 3600\""
     #hostname: ${APP_FQDN}
