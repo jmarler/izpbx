@@ -1,0 +1,94 @@
+## build the izpbx-asterisk image and publish it to the GitHub Container Registry (ghcr.io)
+##
+## - push a release tag (ex. 20.16.22) to publish: 20.16.22, 20.16.22-RUN, 20.16, 20, latest
+## - run manually (Actions > Docker image > Run workflow) to publish the selected branch (ex. main)
+## - pull requests touching the image are built but not published
+name: Docker image
+
+on:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "izpbx-asterisk/**"
+      - ".github/workflows/docker-publish.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/izpbx-asterisk
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      ## the image build (PHP + Asterisk compile) needs more disk space than a default runner has free
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to the GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{version}},suffix=-${{ github.run_number }}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=ref,event=branch
+            type=ref,event=pr
+          labels: |
+            org.opencontainers.image.title=izpbx-asterisk
+            org.opencontainers.image.description=izPBX Cloud Native Telephony System (Asterisk + FreePBX)
+
+      - name: Build info
+        id: info
+        run: |
+          echo "date=$(date +%s)" >> "$GITHUB_OUTPUT"
+          echo "commit=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: izpbx-asterisk
+          file: izpbx-asterisk/Dockerfile
+          platforms: linux/amd64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            APP_VER=${{ steps.meta.outputs.version }}
+            APP_VER_BUILD=${{ github.run_number }}
+            APP_BUILD_COMMIT=${{ steps.info.outputs.commit }}
+            APP_BUILD_DATE=${{ steps.info.outputs.date }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

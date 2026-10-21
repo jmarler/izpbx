@@ -58,9 +58,15 @@ services:
     ports:
     - ${APP_PORT_MYSQL}:3306
 
-  # https://hub.docker.com/r/izdock/izpbx-asterisk/tags?page=1&ordering=last_updated
+  # https://github.com/jmarler/izpbx/pkgs/container/izpbx-asterisk
   izpbx:
-    image: docker.io/izdock/izpbx-asterisk:20.16.21
+    ## upstream images up to docker.io/izdock/izpbx-asterisk:20.16.21 ship PHP vulnerable to CVE-2026-109618 and CVE-2026-109619
+    ## the image is pulled from ghcr.io, or built locally from ./izpbx-asterisk when not available (force a local build with: docker compose build izpbx)
+    image: ghcr.io/jmarler/izpbx-asterisk:20.16.22
+    build:
+      context: ./izpbx-asterisk
+      args:
+        APP_VER: 20.16.22
     container_name: izpbx
     #entrypoint: /bin/bash -c "/bin/bash -c \"sleep 3600\""
     #hostname: ${APP_FQDN}

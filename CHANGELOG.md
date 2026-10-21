@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [20.16.22] - 2026-10-21
+### Security
+- Rebuild the distro PHP 7.4 packages with the upstream fix for the critical remote code execution vulnerabilities CVE-2026-109618 (GHSA-w8hw-w9fx-j79w) and CVE-2026-109619 (GHSA-6wmf-4rv5-p3rp) (https://www.php.net/archive/2026.php#2026-10-21-5). The patch lives in `izpbx-asterisk/php-patches/7.4/` and is skipped automatically once the distro package includes the fix
+- Disable `session.upload_progress` in PHP configuration
+### Changed
+- Container images are built by GitHub Actions and published to `ghcr.io/jmarler/izpbx-asterisk` (tags `20.16.22`, `20.16.22-BUILD`, `20.16`, `20`, `latest`)
+- `compose.yml` pulls `ghcr.io/jmarler/izpbx-asterisk` instead of the vulnerable upstream image, and builds it locally when it can't be pulled
+- README: security notes about the PHP fix, GHCR images usage and migration from the upstream Docker Hub image
+### Fixed
+- Retry the remi-release download during the image build (rpms.remirepo.net resets connections when overloaded)
+- Retry the dnf repositories metadata download during the image build (EPEL mirrors can be out of sync or serve broken certificates)
+
 ## [20.16.21] - 2025-10-14
 ### Changed
 - Updated PBX engine to Asterisk `20.15.2` LTS (https://downloads.asterisk.org/pub/telephony/asterisk/releases/ChangeLog-20.15.2.md)
