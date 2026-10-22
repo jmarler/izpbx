@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [20.16.23] - 2026-10-22
+### Security
+- PHP now comes from the Rocky Linux 8 `php:7.4` stream release `7.4.33-8`, which includes the official fix for CVE-2026-109618 and CVE-2026-109619. The izPBX PHP rebuild added in 20.16.22 detects the fix and skips itself, and stays in place for future advisories
 ### Added
 - `linux/arm64` images (Raspberry Pi 4/5 with a 64-bit OS, Ampere, AWS Graviton): GitHub Actions builds every architecture natively on its own runner and publishes a single multi-arch manifest
 ### Changed
