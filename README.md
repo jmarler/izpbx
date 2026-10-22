@@ -15,6 +15,8 @@ izPBX is a Turnkey Cloud Native VoIP Telephony System powered by Asterisk Engine
 * `20.16`, `20.16.X`, `20.16.X-BUILD`, `20`, `latest` (Asterisk 20 LTS + FreePBX 16)
 * `main`: latest build of the `main` branch (published only when the workflow is run manually)
 
+Images are multi-arch: `linux/amd64` (x86_64: Intel/AMD servers, NAS and PCs) and `linux/arm64` (aarch64: Raspberry Pi 4/5 with a 64-bit OS, Ampere, AWS Graviton). `docker pull` selects the right one automatically.
+
 ## Upstream only (`docker.io/izdock/izpbx-asterisk`, not maintained by this fork, vulnerable PHP):
 * `18.16`, `18.16.X`, `18.16.X-BUILD`,`18` (Asterisk 18 LTS + FreePBX 16)
 * `18.15`, `18.15.X`, `18.15.X-BUILD` (Asterisk 18 LTS + FreePBX 15)
@@ -49,7 +51,7 @@ Cloud and On-Premise, Fast, Automatic and Repeatable deploy of VoIP PBX systems
 - Automatic Remote XML PhoneBook support for compatible VoIP Phones
 - Persistent storage mode for configuration and not volatile data
 - Fail2ban as security monitor to block SIP and HTTP brute force attacks
-- FOP2 Operator Panel
+- FOP2 Operator Panel (`amd64` only, FOP2 is not distributed for ARM)
 - Integrated Asterisk Zabbix agent for services health monitoring
 - Misc `izpbx-*` tools scripts (like `izpbx-callstats`)
 - `izsynth` utility - TTS/Text To Speech synthesizer, background music overlay assembler and audio file converter for PBX and Home Automation Systems
@@ -161,7 +163,7 @@ services:
   db:
     image: docker.io/mariadb:10.11.4
   izpbx:
-    image: ghcr.io/jmarler/izpbx-asterisk:20.16.22
+    image: ghcr.io/jmarler/izpbx-asterisk:20.16.23
 ```
 
 and start the deploy with the same command `docker compose up -d`
@@ -196,7 +198,7 @@ docker compose up -d
 ## Migrate an existing deploy from the upstream Docker Hub image
 If your `compose.yml` still uses `docker.io/izdock/izpbx-asterisk`, change only the image of the `izpbx` service (keep your `.env` and `data` directory):
 ```
-    image: ghcr.io/jmarler/izpbx-asterisk:20.16.22
+    image: ghcr.io/jmarler/izpbx-asterisk:20.16.23
 ```
 then backup the `data` directory, and recreate the container with:
 ```
@@ -205,10 +207,12 @@ docker compose up -d
 ```
 
 # Build and publish images (GitHub Actions)
-The [Docker image workflow](.github/workflows/docker-publish.yml) builds `izpbx-asterisk` for `linux/amd64` and publishes it to `ghcr.io/jmarler/izpbx-asterisk`:
+The [Docker image workflow](.github/workflows/docker-publish.yml) builds `izpbx-asterisk` for `linux/amd64` and `linux/arm64` and publishes it to `ghcr.io/jmarler/izpbx-asterisk`:
 - **Release:** push a version tag (ex. `git tag 20.16.22 && git push origin 20.16.22`) to publish `20.16.22`, `20.16.22-BUILD`, `20.16`, `20` and `latest`
 - **Manual:** run the workflow from the GitHub **Actions** tab to publish the selected branch (ex. `main`)
 - **Pull requests:** changes to `izpbx-asterisk/` are built but not published
+
+Every architecture is compiled natively on its own GitHub runner (`ubuntu-24.04` and `ubuntu-24.04-arm`, free for public repositories) instead of QEMU emulation, then a final job publishes a single multi-arch manifest under all the tags. Check what a tag contains with `docker buildx imagetools inspect ghcr.io/jmarler/izpbx-asterisk:latest`.
 
 The first published image is private: make it public from the package settings (**Packages > izpbx-asterisk > Package settings > Change visibility**), or run `docker login ghcr.io` (with a GitHub token with `read:packages` scope) on the docker hosts before pulling.
 
@@ -614,7 +618,6 @@ For Yealink / Fanvil phones you can use a single Phonebook Menu: **http://IZPBX_
   - `docker compose up -d`
     
 # TODO / Future Development
-- Add ARM version compatible with Raspberry PI 
 - Kubernetes deploy via Helm Chart (major problems for RTP UDP ports range... needs further investigation, no valid solutions right now)
 - Hylafax+ Server + IAXModem (used for sending FAXes. Receiving FAXes via mail is already possibile using FreePBX FAX Module)
 - macOS host support? (edit `compose.yml` and comment localtime volume?)
@@ -653,7 +656,7 @@ for best security, fine-tune the ports range based on your needs by not using st
   email: [support@initzero.it](mailto:support@initzero.it) - web: [InitZero Support](https://www.initzero.it/)
   
 - **Supported architectures**:
-  [`amd64`]
+  [`amd64`, `arm64`]
 
 - **Supported Docker versions**:
   [the latest release](https://github.com/docker/docker-ce/releases/latest) (down to 1.6 on a best-effort basis)
