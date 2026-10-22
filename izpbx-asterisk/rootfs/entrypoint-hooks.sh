@@ -1766,6 +1766,11 @@ function runHooks() {
   chkService ASTERISK_ENABLED
   chkService IZPBX_ENABLED
   chkService ZABBIX_ENABLED
+  # FOP2 is distributed only for x86_64
+  if [[ "$FOP2_ENABLED" = "true" && "$(uname -m)" != "x86_64" ]]; then
+    echo "=> WARNING: FOP2 is available only for x86_64 (this host is $(uname -m))... disabling it"
+    FOP2_ENABLED=false
+  fi
   chkService FOP2_ENABLED
   chkService NTP_ENABLED
 

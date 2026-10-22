@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [20.16.23] - 2026-10-22
+### Added
+- `linux/arm64` images (Raspberry Pi 4/5 with a 64-bit OS, Ampere, AWS Graviton): GitHub Actions builds every architecture natively on its own runner and publishes a single multi-arch manifest
+### Changed
+- FOP2 is disabled with a warning on non x86_64 hosts, because FOP2 is distributed only for x86_64
+
 ## [20.16.22] - 2026-10-21
 ### Security
 - Rebuild the distro PHP 7.4 packages with the upstream fix for the critical remote code execution vulnerabilities CVE-2026-109618 (GHSA-w8hw-w9fx-j79w) and CVE-2026-109619 (GHSA-6wmf-4rv5-p3rp) (https://www.php.net/archive/2026.php#2026-10-21-5). The patch lives in `izpbx-asterisk/php-patches/7.4/` and is skipped automatically once the distro package includes the fix
