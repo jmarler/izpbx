@@ -94,6 +94,9 @@ Every PHP release before 8.2.35, 8.3.36, 8.4.27 and 8.5.12 is affected. Apache `
 ## Why izPBX stays on PHP 7.4
 FreePBX 16 supports only PHP 7.4. The fixed PHP 8.x releases need FreePBX 17, which can't upgrade in place from FreePBX 16. When the vulnerabilities were disclosed, Rocky Linux 8 had no fixed PHP package (its `php:7.4` stream was `7.4.33-6`, its `php:8.2` stream `8.2.33`).
 
+## Rocky Linux fix (izPBX 20.16.23 and later)
+Rocky Linux released `php-7.4.33-8` on 21 October 2026 with the official fix for both CVEs. Starting with izPBX 20.16.23 the image uses that distro package: the izPBX rebuild below sees both CVEs in the distro changelog and skips itself. The rebuild stays in the Dockerfile for future advisories.
+
 ## What changed (izPBX 20.16.22)
 - **Patched PHP 7.4 build:** the Dockerfile has a new first stage (`php-build`) that downloads the Rocky Linux 8 `php:7.4` source package and rebuilds it with the PHP project's minimal fix for 7.4 (php-src branch `PHP-7.4-CVE-2026-109618-109619`, commit `712e60f9`). The patch is rebased onto the distro sources, which already carry part of it: [`izpbx-asterisk/php-patches/7.4/php-7.4.33-cve-2026-109618-109619.patch`](izpbx-asterisk/php-patches/7.4/php-7.4.33-cve-2026-109618-109619.patch).
 - **Patched packages replace the distro ones:** the rebuilt packages (`7.4.33-6.1.izpbx.el8`) are installed over the distro packages, and the image build fails if they aren't installed.
